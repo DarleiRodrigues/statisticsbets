@@ -230,7 +230,8 @@ with tabs[2]:
     if not df_total.empty:
         total_investido = df_total["stake"].sum()
         lucro_total = df_total["lucro"].sum()
-        ROI = (lucro_total / total_investido) * 100 if total_apostas > 0 else 0
+        # Corrigindo: usar total_investido na condição ou definir total_apostas
+        ROI = (lucro_total / total_investido) * 100 if total_investido > 0 else 0
         st.metric("📊 ROI (Retorno sobre Investimento)", f"{ROI:.2f}%")
         
         lucro_por_campeonato = df_total.groupby("campeonato")["lucro"].sum().reset_index()
