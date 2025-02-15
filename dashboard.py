@@ -10,13 +10,19 @@ import plotly.express as px
 # =============================================================================
 
 def get_db_connection():
-    db_url = os.environ.get("DATABASE_URL")
-    if not db_url:
+    try:
+        db_url = st.secrets["DATABASE_URL"]
+    except Exception as e:
         st.error("A variável de ambiente DATABASE_URL não está configurada!")
         st.stop()
-    # Conecta ao banco PostgreSQL usando a URL de conexão
-    conn = psycopg2.connect(db_url)
-    return conn
+    # Opcional: exiba (ou log) parte do valor para debug (cuidado para não expor dados sensíveis)
+    st.write("Conectando com URL: ", db_url[:30] + "...")
+    try:
+        conn = psycopg2.connect(db_url)
+        return conn
+    except Exception as e:
+        st.error("Erro na conexão com o banco de dados: " + str(e))
+        st.stop()
 
 def criar_tabelas():
     conn = get_db_connection()
