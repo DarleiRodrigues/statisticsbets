@@ -249,3 +249,20 @@ with tabs[2]:
         st.plotly_chart(fig2)
     else:
         st.warning("Nenhuma aposta registrada ainda.")
+
+# Excluir todas as apostas de um usuario
+
+st.subheader("❌ Excluir todas as apostas")
+if st.button("Excluir minhas apostas"):
+    confirm = st.checkbox("Confirmo que desejo excluir todas as minhas apostas.")
+    if confirm:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM apostas WHERE email = %s", (st.session_state.email,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        st.success("Todas as apostas foram excluídas com sucesso!")
+    else:
+        st.warning("Marque a caixa para confirmar a exclusão.")
+
