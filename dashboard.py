@@ -54,6 +54,53 @@ def criar_tabelas():
 criar_tabelas()
 
 # =============================================================================
+# Função para reindexar as apostas (reorganiza os IDs de forma sequencial)
+# =============================================================================
+def reindex_apostas():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    # Desativa as verificações de chave estrangeira temporariamente
+    cur.execute("PRAGMA foreign_keys=OFF;")
+    conn.commit()
+    cur.execute("BEGIN TRANSACTION;")
+    # Cria uma tabela temporária com os dados ordenados pelo id
+    cur.execute("""
+        CREATE TEMPORARY TABLE apostas_backup AS 
+        SELECT email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro 
+        FROM apostas 
+        ORDER BY id;
+    """)
+    cur.execute("DROP TABLE apostas;")
+    cur.execute("""
+        CREATE TABLE apostas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT,
+            metodo TEXT,
+            data TEXT,
+            campeonato TEXT,
+            time_mandante TEXT,
+            time_visitante TEXT,
+            mercado TEXT,
+            tipo_aposta TEXT,
+            odd REAL,
+            stake REAL,
+            resultado TEXT,
+            lucro REAL,
+            FOREIGN KEY(email) REFERENCES usuarios(email)
+        );
+    """)
+    # Insere os dados de volta; os novos IDs serão sequenciais a partir de 1
+    cur.execute("""
+        INSERT INTO apostas (email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro)
+        SELECT email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro 
+        FROM apostas_backup;
+    """)
+    cur.execute("COMMIT;")
+    cur.execute("PRAGMA foreign_keys=ON;")
+    conn.commit()
+    conn.close()
+
+# =============================================================================
 # Configuração – Uso pessoal (email fixo)
 # =============================================================================
 user_email = "darleirodriguesalves0@gmail.com"  # Altere se desejar
@@ -281,8 +328,7 @@ elif page == "Relatórios e Estatísticas":
             st.plotly_chart(fig)
             
             st.markdown("### Apostas Registradas")
-            # Preparar DataFrame para exclusão: inclui o ID para uso na exclusão,
-            # mas o exibiremos sem essa coluna para uma visualização mais limpa.
+            # Prepara DataFrame para exclusão: inclui o ID para uso interno, mas não o exibe
             df_exibicao = df_filtrado[["id", "data", "campeonato", "time_mandante", "time_visitante", "odd", "resultado", "lucro"]].copy()
             df_exibicao["data"] = df_exibicao["data"].dt.date
             df_exibicao = df_exibicao.rename(columns={
@@ -295,11 +341,11 @@ elif page == "Relatórios e Estatísticas":
                 "resultado": "Resultado",
                 "lucro": "Lucro"
             })
-            # Cria um DataFrame para exibição sem o ID
+            # Cria um DataFrame para exibição sem o ID (para visualização) e oculta o índice do DataFrame
             display_df = df_exibicao.drop(columns=["ID"])
-            st.dataframe(display_df)
+            st.dataframe(display_df.style.hide_index())
             
-            # Opção para excluir apostas
+            # Opção para excluir apostas: apresenta uma lista com informações (incluindo o ID internamente)
             options_for_deletion = df_exibicao.apply(
                 lambda row: f"ID {row['ID']} - {row['Data']} - {row['Campeonato']} - {row['Mandante']} vs {row['Visitante']}", axis=1
             ).tolist()
@@ -307,7 +353,7 @@ elif page == "Relatórios e Estatísticas":
             if st.button("❌ Excluir Apostas Selecionadas"):
                 for item in selected_deletions:
                     try:
-                        # Extrai o ID a partir da string (assumindo que está no formato "ID {id} - ...")
+                        # Extrai o ID a partir da string (formato: "ID {id} - ...")
                         id_val = int(item.split(" ")[1])
                         conn = get_db_connection()
                         conn.execute("DELETE FROM apostas WHERE id = ?", (id_val,))
@@ -316,6 +362,8 @@ elif page == "Relatórios e Estatísticas":
                     except Exception as e:
                         st.error(f"Erro ao excluir aposta {item}: {e}")
                 st.success("Apostas excluídas com sucesso!")
+                # Reorganiza os IDs de forma sequencial
+                reindex_apostas()
                 st.experimental_rerun()
         else:
             st.warning("Nenhuma aposta encontrada com os filtros selecionados.")
