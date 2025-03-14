@@ -5,7 +5,7 @@ import datetime
 import plotly.express as px
 
 # =============================================================================
-# Funções de conexão e criação de tabelas
+# Funções de Conexão e Criação de Tabelas
 # =============================================================================
 def get_db_connection():
     conn = sqlite3.connect("apostas.db", check_same_thread=False)
@@ -14,7 +14,7 @@ def get_db_connection():
 
 def criar_tabelas():
     conn = get_db_connection()
-    # Tabela de usuários (mantida para estrutura, mesmo que para uso pessoal)
+    # Tabela de usuários (mantida para estrutura, mesmo que seja uso pessoal)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             email TEXT PRIMARY KEY
@@ -54,25 +54,14 @@ def criar_tabelas():
 criar_tabelas()
 
 # =============================================================================
-# Função para reindexar as apostas (reorganiza os IDs de forma sequencial)
+# Função para Reorganizar os IDs da Tabela de Apostas
 # =============================================================================
 def reindex_apostas():
     conn = get_db_connection()
     cur = conn.cursor()
-    # Desativa temporariamente as verificações de chave estrangeira
-    cur.execute("PRAGMA foreign_keys=OFF;")
-    conn.commit()
-    cur.execute("BEGIN TRANSACTION;")
-    # Cria uma tabela temporária com os dados ordenados pelo id
+    # Cria uma tabela temporária com a mesma estrutura
     cur.execute("""
-        CREATE TEMPORARY TABLE apostas_backup AS 
-        SELECT email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro 
-        FROM apostas 
-        ORDER BY id;
-    """)
-    cur.execute("DROP TABLE apostas;")
-    cur.execute("""
-        CREATE TABLE apostas (
+        CREATE TABLE IF NOT EXISTS apostas_temp (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT,
             metodo TEXT,
@@ -85,34 +74,35 @@ def reindex_apostas():
             odd REAL,
             stake REAL,
             resultado TEXT,
-            lucro REAL,
-            FOREIGN KEY(email) REFERENCES usuarios(email)
-        );
+            lucro REAL
+        )
     """)
-    # Insere os dados de volta; os novos IDs serão sequenciais a partir de 1
+    # Insere os dados da tabela original (ordenados pelo id)
     cur.execute("""
-        INSERT INTO apostas (email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro)
-        SELECT email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro 
-        FROM apostas_backup;
+        INSERT INTO apostas_temp (email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro)
+        SELECT email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro
+        FROM apostas
+        ORDER BY id
     """)
-    cur.execute("COMMIT;")
-    cur.execute("PRAGMA foreign_keys=ON;")
+    # Remove a tabela antiga e renomeia a temporária
+    cur.execute("DROP TABLE apostas")
+    cur.execute("ALTER TABLE apostas_temp RENAME TO apostas")
     conn.commit()
     conn.close()
 
 # =============================================================================
-# Configuração – Uso pessoal (email fixo)
+# Configuração – Uso Pessoal (email fixo)
 # =============================================================================
 user_email = "darleirodriguesalves0@gmail.com"  # Altere se desejar
 
 # =============================================================================
-# Barra Lateral – Navegação entre páginas
+# Barra Lateral – Navegação entre Páginas
 # =============================================================================
 st.sidebar.title("Menu")
 page = st.sidebar.radio("Selecione a página:", ["Registro de Aposta", "Relatórios e Estatísticas"])
 
 # =============================================================================
-# Custom CSS para melhorar a aparência (caso necessário)
+# Custom CSS para Botão de Exclusão (e demais ajustes visuais)
 # =============================================================================
 st.markdown(
     """
@@ -133,7 +123,7 @@ st.markdown(
 )
 
 # =============================================================================
-# Página: Registro de Aposta (com aba para Cadastro de Métodos)
+# Página: Registro de Aposta (com Aba para Cadastro de Métodos)
 # =============================================================================
 if page == "Registro de Aposta":
     st.title("Registro de Aposta")
@@ -201,6 +191,7 @@ if page == "Registro de Aposta":
         
         tipo_aposta = st.selectbox("💰 Tipo de Aposta", ["Back (A Favor)", "Lay (Contra)"])
         odd = st.number_input("📈 Odd", min_value=1.0, format="%.2f")
+        # Permite stakes menores que 1 (ex.: 0.25)
         stake = st.number_input("💵 Stake", min_value=0.01, format="%.2f")
         resultado = st.selectbox("🎲 Resultado", ["Green ✅", "Red ❌"])
         
@@ -328,9 +319,10 @@ elif page == "Relatórios e Estatísticas":
             st.plotly_chart(fig)
             
             st.markdown("### Apostas Registradas")
-            # Prepara DataFrame para exclusão: inclui o ID para uso interno
+            # Prepara DataFrame para exibição e exclusão
             df_exibicao = df_filtrado[["id", "data", "campeonato", "time_mandante", "time_visitante", "odd", "resultado", "lucro"]].copy()
             df_exibicao["data"] = df_exibicao["data"].dt.date
+            # Renomeia as colunas para exibição
             df_exibicao = df_exibicao.rename(columns={
                 "id": "ID",
                 "data": "Data",
@@ -341,18 +333,19 @@ elif page == "Relatórios e Estatísticas":
                 "resultado": "Resultado",
                 "lucro": "Lucro"
             })
-            # Exibe a tabela com o índice padrão (sem ocultá-lo)
-            st.dataframe(df_exibicao)
+            # Exibe a tabela sem a coluna "ID"
+            st.dataframe(df_exibicao.drop(columns=["ID"]))
             
-            # Opção para excluir apostas: apresenta uma lista com informações (incluindo o ID internamente)
+            # Cria opções para exclusão utilizando o ID (não exibido na tabela) e outros dados
             options_for_deletion = df_exibicao.apply(
-                lambda row: f"ID {row['ID']} - {row['Data']} - {row['Campeonato']} - {row['Mandante']} vs {row['Visitante']}", axis=1
+                lambda row: f"Aposta {row['ID']} - {row['Data']} - {row['Campeonato']} - {row['Mandante']} vs {row['Visitante']}",
+                axis=1
             ).tolist()
             selected_deletions = st.multiselect("Selecione as apostas para excluir", options=options_for_deletion)
             if st.button("❌ Excluir Apostas Selecionadas"):
                 for item in selected_deletions:
                     try:
-                        # Extrai o ID a partir da string (formato: "ID {id} - ...")
+                        # Extrai o ID da string (formato: "Aposta {ID} - ...")
                         id_val = int(item.split(" ")[1])
                         conn = get_db_connection()
                         conn.execute("DELETE FROM apostas WHERE id = ?", (id_val,))
@@ -361,7 +354,7 @@ elif page == "Relatórios e Estatísticas":
                     except Exception as e:
                         st.error(f"Erro ao excluir aposta {item}: {e}")
                 st.success("Apostas excluídas com sucesso!")
-                # Reorganiza os IDs de forma sequencial
+                # Reorganiza os IDs de forma sequencial na tabela do banco de dados
                 reindex_apostas()
                 st.experimental_rerun()
         else:
