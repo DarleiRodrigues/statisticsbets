@@ -281,7 +281,8 @@ elif page == "Relatórios e Estatísticas":
             st.plotly_chart(fig)
             
             st.markdown("### Apostas Registradas")
-            # Preparar DataFrame para exibição (incluindo o ID para facilitar a exclusão)
+            # Preparar DataFrame para exclusão: inclui o ID para uso na exclusão,
+            # mas o exibiremos sem essa coluna para uma visualização mais limpa.
             df_exibicao = df_filtrado[["id", "data", "campeonato", "time_mandante", "time_visitante", "odd", "resultado", "lucro"]].copy()
             df_exibicao["data"] = df_exibicao["data"].dt.date
             df_exibicao = df_exibicao.rename(columns={
@@ -294,10 +295,11 @@ elif page == "Relatórios e Estatísticas":
                 "resultado": "Resultado",
                 "lucro": "Lucro"
             })
-            st.dataframe(df_exibicao)
+            # Cria um DataFrame para exibição sem o ID
+            display_df = df_exibicao.drop(columns=["ID"])
+            st.dataframe(display_df)
             
             # Opção para excluir apostas
-            # Cria uma lista de opções descritivas para exclusão, utilizando o ID
             options_for_deletion = df_exibicao.apply(
                 lambda row: f"ID {row['ID']} - {row['Data']} - {row['Campeonato']} - {row['Mandante']} vs {row['Visitante']}", axis=1
             ).tolist()
