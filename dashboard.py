@@ -4,7 +4,7 @@ import pandas as pd
 import datetime
 import plotly.express as px
 
-# Configuração da página para uso em tela inteira
+# Configura a página para ocupar a largura total da tela
 st.set_page_config(layout="wide", page_title="Dashboard de Apostas")
 
 # =============================================================================
@@ -17,7 +17,7 @@ def get_db_connection():
 
 def criar_tabelas():
     conn = get_db_connection()
-    # Tabela de usuários (mantida para estrutura, mesmo que seja uso pessoal)
+    # Tabela de usuários (mantida para estrutura, mesmo para uso pessoal)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             email TEXT PRIMARY KEY
@@ -51,7 +51,7 @@ def criar_tabelas():
             mercado TEXT
         )
     """)
-    # Tabela de configurações (para salvar a banca inicial, por exemplo)
+    # Tabela de configurações (ex.: banca inicial)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS configuracoes (
             chave TEXT PRIMARY KEY,
@@ -69,7 +69,6 @@ criar_tabelas()
 def reindex_apostas():
     conn = get_db_connection()
     cur = conn.cursor()
-    # Cria uma tabela temporária com a mesma estrutura
     cur.execute("""
         CREATE TABLE IF NOT EXISTS apostas_temp (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,14 +86,12 @@ def reindex_apostas():
             lucro REAL
         )
     """)
-    # Insere os dados da tabela original (ordenados pelo id)
     cur.execute("""
         INSERT INTO apostas_temp (email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro)
         SELECT email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro
         FROM apostas
         ORDER BY id
     """)
-    # Remove a tabela antiga e renomeia a temporária
     cur.execute("DROP TABLE apostas")
     cur.execute("ALTER TABLE apostas_temp RENAME TO apostas")
     conn.commit()
@@ -119,20 +116,23 @@ def set_config(chave, valor):
     conn.close()
 
 # =============================================================================
-# Função de Autocomplete (simples, exibindo sugestões)
+# Função de Input com Validação (estilo Google Sheets)
 # =============================================================================
-def autocomplete_input(label, options, key=None):
-    value = st.text_input(label, key=key, placeholder="Digite ou selecione")
-    if value:
-        sugestões = [opt for opt in options if value.lower() in opt.lower()]
-        if sugestões:
-            st.caption("Sugestões: " + ", ".join(sugestões))
-    return value
+def validated_input(label, options, key):
+    # Ordena as opções já registradas e acrescenta a opção para inserir um novo valor
+    options = sorted(options)
+    options_with_new = options + ["Adicionar Novo"]
+    selected = st.selectbox(label, options_with_new, key=key+"_select")
+    if selected == "Adicionar Novo":
+        new_val = st.text_input(f"Digite novo {label}", key=key+"_input")
+        return new_val
+    else:
+        return selected
 
 # =============================================================================
 # Configuração – Uso Pessoal (email fixo)
 # =============================================================================
-user_email = "darleirodriguesalves0@gmail.com"  # Altere se desejar
+user_email = "darleirodriguesalves0@gmail.com"  # Altere se necessário
 
 # =============================================================================
 # Barra Lateral – Navegação entre Páginas
@@ -141,7 +141,7 @@ st.sidebar.title("Menu")
 page = st.sidebar.radio("Selecione a página:", ["Registro de Aposta", "Relatórios e Estatísticas"])
 
 # =============================================================================
-# Custom CSS para Botão de Exclusão (e demais ajustes visuais)
+# Custom CSS para Botão de Exclusão (e outros ajustes visuais)
 # =============================================================================
 st.markdown(
     """
@@ -162,13 +162,13 @@ st.markdown(
 )
 
 # =============================================================================
-# Página: Registro de Aposta (com Aba para Cadastro de Métodos)
+# Página: Registro de Aposta (com aba para Cadastro de Métodos)
 # =============================================================================
 if page == "Registro de Aposta":
     st.title("Registro de Aposta")
     st.write("Utilize esta página para registrar novas apostas e cadastrar métodos.")
 
-    # Cria abas para: Nova Aposta e Cadastro de Métodos
+    # Cria abas: uma para nova aposta e outra para cadastro de métodos
     tabs = st.tabs(["Nova Aposta", "Cadastro de Métodos"])
     
     # -------------------------------------------------------------------------
@@ -188,10 +188,9 @@ if page == "Registro de Aposta":
             st.warning("Nenhum método cadastrado. Cadastre um método na aba 'Cadastro de Métodos'.")
             metodo_selecionado = None
         
-        # Data da aposta
         data_aposta = st.date_input("📅 Data da Aposta", value=datetime.date.today())
         
-        # Função para buscar valores únicos já registrados (para autocomplete)
+        # Função para buscar valores únicos já registrados no banco
         def get_unique_values(col_name):
             conn = get_db_connection()
             query = f"SELECT DISTINCT {col_name} FROM apostas WHERE email = ? AND {col_name} != ''"
@@ -199,17 +198,17 @@ if page == "Registro de Aposta":
             conn.close()
             return sorted(df_temp[col_name].dropna().unique().tolist())
         
-        # Um único input para cada campo com autocomplete
+        # Campos de Campeonato, Time Mandante e Time Visitante com validação estilo Google Sheets
         camp_options = get_unique_values("campeonato")
-        campeonato = autocomplete_input("🏆 Campeonato", camp_options, key="campeonato")
+        campeonato = validated_input("🏆 Campeonato", camp_options, key="campeonato")
         
         time_mandante_options = get_unique_values("time_mandante")
-        time_mandante = autocomplete_input("🏠 Time Mandante", time_mandante_options, key="time_mandante")
+        time_mandante = validated_input("🏠 Time Mandante", time_mandante_options, key="time_mandante")
         
         time_visitante_options = get_unique_values("time_visitante")
-        time_visitante = autocomplete_input("🚀 Time Visitante", time_visitante_options, key="time_visitante")
+        time_visitante = validated_input("🚀 Time Visitante", time_visitante_options, key="time_visitante")
         
-        # Mercado: adiciona a opção "Bingo" aos mercados já existentes
+        # Mercado: adiciona a opção "Bingo"
         mercados = ["Over 1.5", "Lay Visitante", "Lay 0x1", "Target Futebol", "Target Basquete", "Bingo"]
         mercado = st.selectbox("🎯 Mercado", options=mercados)
         
@@ -307,7 +306,7 @@ elif page == "Relatórios e Estatísticas":
     if st.button("Atualizar Página"):
         st.experimental_rerun()
     
-    # --- Consulta das apostas ---
+    # --- Consulta das Apostas ---
     conn = get_db_connection()
     df = pd.read_sql_query("SELECT * FROM apostas WHERE email = ?", conn, params=(user_email,))
     conn.close()
@@ -359,7 +358,9 @@ elif page == "Relatórios e Estatísticas":
             # --- Gráfico: Lucro Acumulado por Período ---
             df_agrupado = df_filtrado.groupby("Periodo")["lucro"].sum().reset_index()
             df_agrupado["Lucro Acumulado"] = df_agrupado["lucro"].cumsum()
-            fig_acumulado = px.line(df_agrupado, x="Periodo", y="Lucro Acumulado", title="📈 Lucro Acumulado por Período", template="plotly_white")
+            fig_acumulado = px.line(df_agrupado, x="Periodo", y="Lucro Acumulado", 
+                                    title="📈 Lucro Acumulado por Período", 
+                                    template="plotly_white")
             st.plotly_chart(fig_acumulado, use_container_width=True)
             
             # --- Exibição da Tabela de Apostas ---
@@ -376,6 +377,7 @@ elif page == "Relatórios e Estatísticas":
                 "resultado": "Resultado",
                 "lucro": "Lucro"
             })
+            # Remove o campo "ID" da exibição (para fins de visualização)
             st.dataframe(df_exibicao.drop(columns=["ID"]), use_container_width=True)
             
             # --- Exclusão de Apostas ---
