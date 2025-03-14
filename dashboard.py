@@ -48,6 +48,13 @@ def criar_tabelas():
             mercado TEXT
         )
     """)
+    # Tabela de configurações (para salvar a banca inicial, por exemplo)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS configuracoes (
+            chave TEXT PRIMARY KEY,
+            valor REAL
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -87,6 +94,24 @@ def reindex_apostas():
     # Remove a tabela antiga e renomeia a temporária
     cur.execute("DROP TABLE apostas")
     cur.execute("ALTER TABLE apostas_temp RENAME TO apostas")
+    conn.commit()
+    conn.close()
+
+# =============================================================================
+# Funções para Configurações (Banca Inicial)
+# =============================================================================
+def get_config(chave):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT valor FROM configuracoes WHERE chave = ?", (chave,))
+    result = cur.fetchone()
+    conn.close()
+    return result["valor"] if result else None
+
+def set_config(chave, valor):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)", (chave, valor))
     conn.commit()
     conn.close()
 
@@ -262,7 +287,22 @@ if page == "Registro de Aposta":
 elif page == "Relatórios e Estatísticas":
     st.title("Relatórios e Estatísticas")
     
-    # Consulta as apostas do usuário
+    # --- Configuração da Banca Inicial ---
+    st.subheader("Configuração da Banca Inicial")
+    banca_atual = get_config("banca_inicial")
+    if banca_atual is None:
+        st.info("Nenhuma banca inicial definida. Defina um valor abaixo:")
+    else:
+        st.write(f"Banca Inicial Atual: **{banca_atual:.2f} unidades**")
+    with st.form("form_banca"):
+        nova_banca = st.number_input("Defina/Atualize a Banca Inicial", min_value=0.0, format="%.2f", value=banca_atual if banca_atual is not None else 0.0)
+        submitted_banca = st.form_submit_button("Salvar Banca Inicial")
+        if submitted_banca:
+            set_config("banca_inicial", nova_banca)
+            st.success("Banca Inicial atualizada!")
+            st.experimental_rerun()
+    
+    # --- Consulta das apostas ---
     conn = get_db_connection()
     df = pd.read_sql_query("SELECT * FROM apostas WHERE email = ?", conn, params=(user_email,))
     conn.close()
@@ -270,7 +310,7 @@ elif page == "Relatórios e Estatísticas":
     if not df.empty:
         df["data"] = pd.to_datetime(df["data"])
         
-        st.markdown("### Filtros")
+        st.markdown("### Filtros de Período e Mercado")
         col1, col2, col3, col4 = st.columns(4)
         data_min = df["data"].min().date()
         data_max = df["data"].max().date()
@@ -297,7 +337,7 @@ elif page == "Relatórios e Estatísticas":
             elif agrupamento == "Ano":
                 df_filtrado["Periodo"] = df_filtrado["data"].dt.to_period("Y").dt.to_timestamp()
             
-            # Cálculo de métricas
+            # --- Cálculo de Métricas ---
             total_apostas = len(df_filtrado)
             green_apostas = len(df_filtrado[df_filtrado["resultado"] == "Green ✅"])
             taxa_acerto = (green_apostas / total_apostas) * 100 if total_apostas > 0 else 0
@@ -312,17 +352,16 @@ elif page == "Relatórios e Estatísticas":
             else:
                 colC.metric("🎯 Odd Mínima", "N/A")
             
-            # Gráfico do Lucro Acumulado por Período
+            # --- Gráfico: Lucro Acumulado por Período ---
             df_agrupado = df_filtrado.groupby("Periodo")["lucro"].sum().reset_index()
             df_agrupado["Lucro Acumulado"] = df_agrupado["lucro"].cumsum()
-            fig = px.line(df_agrupado, x="Periodo", y="Lucro Acumulado", title="📈 Lucro Acumulado por Período")
-            st.plotly_chart(fig)
+            fig_acumulado = px.line(df_agrupado, x="Periodo", y="Lucro Acumulado", title="📈 Lucro Acumulado por Período")
+            st.plotly_chart(fig_acumulado)
             
+            # --- Exibição da Tabela de Apostas (sem exibir o ID) ---
             st.markdown("### Apostas Registradas")
-            # Prepara DataFrame para exibição e exclusão
             df_exibicao = df_filtrado[["id", "data", "campeonato", "time_mandante", "time_visitante", "odd", "resultado", "lucro"]].copy()
             df_exibicao["data"] = df_exibicao["data"].dt.date
-            # Renomeia as colunas para exibição
             df_exibicao = df_exibicao.rename(columns={
                 "id": "ID",
                 "data": "Data",
@@ -333,10 +372,9 @@ elif page == "Relatórios e Estatísticas":
                 "resultado": "Resultado",
                 "lucro": "Lucro"
             })
-            # Exibe a tabela sem a coluna "ID"
             st.dataframe(df_exibicao.drop(columns=["ID"]))
             
-            # Cria opções para exclusão utilizando o ID (não exibido na tabela) e outros dados
+            # --- Exclusão de Apostas ---
             options_for_deletion = df_exibicao.apply(
                 lambda row: f"Aposta {row['ID']} - {row['Data']} - {row['Campeonato']} - {row['Mandante']} vs {row['Visitante']}",
                 axis=1
@@ -345,7 +383,6 @@ elif page == "Relatórios e Estatísticas":
             if st.button("❌ Excluir Apostas Selecionadas"):
                 for item in selected_deletions:
                     try:
-                        # Extrai o ID da string (formato: "Aposta {ID} - ...")
                         id_val = int(item.split(" ")[1])
                         conn = get_db_connection()
                         conn.execute("DELETE FROM apostas WHERE id = ?", (id_val,))
@@ -354,9 +391,51 @@ elif page == "Relatórios e Estatísticas":
                     except Exception as e:
                         st.error(f"Erro ao excluir aposta {item}: {e}")
                 st.success("Apostas excluídas com sucesso!")
-                # Reorganiza os IDs de forma sequencial na tabela do banco de dados
                 reindex_apostas()
                 st.experimental_rerun()
+            
+            # --- Gráficos Adicionais ---
+            st.markdown("## Análises Adicionais")
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+                # Lucro por Método
+                df_metodo = df.groupby("metodo")["lucro"].sum().reset_index().sort_values(by="lucro", ascending=False)
+                fig_metodo = px.bar(df_metodo, x="metodo", y="lucro", title="📊 Lucro por Método")
+                st.plotly_chart(fig_metodo)
+            with col_m2:
+                # Lucro por Campeonato
+                df_camp = df.groupby("campeonato")["lucro"].sum().reset_index().sort_values(by="lucro", ascending=False)
+                fig_camp = px.bar(df_camp, x="campeonato", y="lucro", title="📊 Lucro por Campeonato")
+                st.plotly_chart(fig_camp)
+            
+            # Lucro por Time (união de times mandantes e visitantes)
+            df_mandante = df[["time_mandante", "lucro"]].rename(columns={"time_mandante": "time"})
+            df_visitante = df[["time_visitante", "lucro"]].rename(columns={"time_visitante": "time"})
+            df_times = pd.concat([df_mandante, df_visitante])
+            df_times_grouped = df_times.groupby("time")["lucro"].sum().reset_index().sort_values(by="lucro", ascending=False)
+            fig_times = px.bar(df_times_grouped, x="time", y="lucro", title="📊 Lucro por Time")
+            st.plotly_chart(fig_times)
+            
+            # --- Gráfico: Evolução da Banca ---
+            st.markdown("## Evolução da Banca")
+            banca_inicial = get_config("banca_inicial")
+            if banca_inicial is None:
+                st.warning("Defina a banca inicial para visualizar a evolução.")
+            else:
+                # Agrupa os lucros por data e preenche lacunas no período
+                df_banca = df.copy()
+                df_banca["Data"] = df_banca["data"].dt.date
+                df_banca = df_banca.groupby("Data")["lucro"].sum().reset_index()
+                # Cria uma sequência de datas do período
+                datas = pd.date_range(start=data_inicio, end=data_fim).date
+                df_datas = pd.DataFrame({"Data": datas})
+                df_banca = pd.merge(df_datas, df_banca, on="Data", how="left")
+                df_banca["lucro"] = df_banca["lucro"].fillna(0)
+                df_banca["Lucro Acumulado"] = df_banca["lucro"].cumsum()
+                df_banca["Banca"] = banca_inicial + df_banca["Lucro Acumulado"]
+                fig_banca = px.line(df_banca, x="Data", y="Banca", title="📈 Evolução da Banca")
+                st.plotly_chart(fig_banca)
+            
         else:
             st.warning("Nenhuma aposta encontrada com os filtros selecionados.")
     else:
