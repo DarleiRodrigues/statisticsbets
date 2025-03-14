@@ -72,7 +72,8 @@ with col2:
 
 tipo_aposta = st.selectbox("💰 Tipo de Aposta", ["Back (A Favor)", "Lay (Contra)"])
 odd = st.number_input("📈 Odd", min_value=1.0, format="%.2f")
-stake = st.number_input("💵 Stake", min_value=1.0, format="%.2f")
+# Permite inserir stake com valores menores que 1 (ex.: 0.25)
+stake = st.number_input("💵 Stake", min_value=0.01, format="%.2f")
 resultado = st.selectbox("🎲 Resultado", ["Green ✅", "Red ❌"])
 
 if st.button("✅ Adicionar Aposta"):
@@ -203,7 +204,6 @@ if not df.empty:
         taxa_acerto = (green_apostas / total_apostas) * 100 if total_apostas > 0 else 0
         
         # Cálculo da Odd Mínima de Entrada:
-        # Converte a taxa de acerto para fração
         winrate_fraction = (green_apostas / total_apostas) if total_apostas > 0 else 0
         if winrate_fraction > 0:
             odd_minima = round(1 / winrate_fraction, 2)
