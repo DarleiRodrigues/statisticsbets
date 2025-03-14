@@ -4,6 +4,9 @@ import pandas as pd
 import datetime
 import plotly.express as px
 
+# Configuração da página para uso em tela inteira
+st.set_page_config(layout="wide", page_title="Dashboard de Apostas")
+
 # =============================================================================
 # Funções de Conexão e Criação de Tabelas
 # =============================================================================
