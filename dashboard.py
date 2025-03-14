@@ -4,9 +4,6 @@ import pandas as pd
 import datetime
 import plotly.express as px
 
-# Configura a página para ocupar a largura total da tela
-st.set_page_config(layout="wide", page_title="Dashboard de Apostas")
-
 # =============================================================================
 # Funções de Conexão e Criação de Tabelas
 # =============================================================================
@@ -17,7 +14,7 @@ def get_db_connection():
 
 def criar_tabelas():
     conn = get_db_connection()
-    # Tabela de usuários (mantida para estrutura, mesmo para uso pessoal)
+    # Tabela de usuários (mantida para estrutura, mesmo que seja uso pessoal)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             email TEXT PRIMARY KEY
@@ -51,7 +48,7 @@ def criar_tabelas():
             mercado TEXT
         )
     """)
-    # Tabela de configurações (ex.: banca inicial)
+    # Tabela de configurações (para salvar a banca inicial, por exemplo)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS configuracoes (
             chave TEXT PRIMARY KEY,
@@ -69,6 +66,7 @@ criar_tabelas()
 def reindex_apostas():
     conn = get_db_connection()
     cur = conn.cursor()
+    # Cria uma tabela temporária com a mesma estrutura
     cur.execute("""
         CREATE TABLE IF NOT EXISTS apostas_temp (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,12 +84,14 @@ def reindex_apostas():
             lucro REAL
         )
     """)
+    # Insere os dados da tabela original (ordenados pelo id)
     cur.execute("""
         INSERT INTO apostas_temp (email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro)
         SELECT email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro
         FROM apostas
         ORDER BY id
     """)
+    # Remove a tabela antiga e renomeia a temporária
     cur.execute("DROP TABLE apostas")
     cur.execute("ALTER TABLE apostas_temp RENAME TO apostas")
     conn.commit()
@@ -116,23 +116,9 @@ def set_config(chave, valor):
     conn.close()
 
 # =============================================================================
-# Função de Input com Validação (estilo Google Sheets)
-# =============================================================================
-def validated_input(label, options, key):
-    # Ordena as opções já registradas e acrescenta a opção para inserir um novo valor
-    options = sorted(options)
-    options_with_new = options + ["Adicionar Novo"]
-    selected = st.selectbox(label, options_with_new, key=key+"_select")
-    if selected == "Adicionar Novo":
-        new_val = st.text_input(f"Digite novo {label}", key=key+"_input")
-        return new_val
-    else:
-        return selected
-
-# =============================================================================
 # Configuração – Uso Pessoal (email fixo)
 # =============================================================================
-user_email = "darleirodriguesalves0@gmail.com"  # Altere se necessário
+user_email = "darleirodriguesalves0@gmail.com"  # Altere se desejar
 
 # =============================================================================
 # Barra Lateral – Navegação entre Páginas
@@ -141,7 +127,7 @@ st.sidebar.title("Menu")
 page = st.sidebar.radio("Selecione a página:", ["Registro de Aposta", "Relatórios e Estatísticas"])
 
 # =============================================================================
-# Custom CSS para Botão de Exclusão (e outros ajustes visuais)
+# Custom CSS para Botão de Exclusão (e demais ajustes visuais)
 # =============================================================================
 st.markdown(
     """
@@ -156,19 +142,24 @@ st.markdown(
     .delete-button:hover {
         background-color: #ff0000;
     }
+    /* Aumenta a largura da página */
+    .main .block-container{
+        max-width: 1200px;
+        padding: 1rem 2rem;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # =============================================================================
-# Página: Registro de Aposta (com aba para Cadastro de Métodos)
+# Página: Registro de Aposta (com Aba para Cadastro de Métodos)
 # =============================================================================
 if page == "Registro de Aposta":
     st.title("Registro de Aposta")
     st.write("Utilize esta página para registrar novas apostas e cadastrar métodos.")
 
-    # Cria abas: uma para nova aposta e outra para cadastro de métodos
+    # Cria abas para: Nova Aposta e Cadastro de Métodos
     tabs = st.tabs(["Nova Aposta", "Cadastro de Métodos"])
     
     # -------------------------------------------------------------------------
@@ -188,27 +179,30 @@ if page == "Registro de Aposta":
             st.warning("Nenhum método cadastrado. Cadastre um método na aba 'Cadastro de Métodos'.")
             metodo_selecionado = None
         
+        # Data da aposta
         data_aposta = st.date_input("📅 Data da Aposta", value=datetime.date.today())
         
-        # Função para buscar valores únicos já registrados no banco
+        # Função para buscar valores únicos já registrados (para autocomplete)
         def get_unique_values(col_name):
             conn = get_db_connection()
             query = f"SELECT DISTINCT {col_name} FROM apostas WHERE email = ? AND {col_name} != ''"
             df_temp = pd.read_sql_query(query, conn, params=(user_email,))
             conn.close()
-            return sorted(df_temp[col_name].dropna().unique().tolist())
+            valores = df_temp[col_name].dropna().unique().tolist()
+            return sorted(valores)
         
-        # Campos de Campeonato, Time Mandante e Time Visitante com validação estilo Google Sheets
+        # Campeonato – input com sugestões (autocomplete simples)
         camp_options = get_unique_values("campeonato")
-        campeonato = validated_input("🏆 Campeonato", camp_options, key="campeonato")
+        campeonato = st.text_input("🏆 Campeonato", placeholder="Digite o nome do campeonato")
+        if camp_options:
+            st.info(f"Exemplos: {', '.join(camp_options[:5])}")
         
-        time_mandante_options = get_unique_values("time_mandante")
-        time_mandante = validated_input("🏠 Time Mandante", time_mandante_options, key="time_mandante")
+        # Time Mandante – input com sugestões
+        time_mandante = st.text_input("🏠 Time Mandante", placeholder="Digite o nome do time mandante")
+        # Time Visitante – input com sugestões
+        time_visitante = st.text_input("🚀 Time Visitante", placeholder="Digite o nome do time visitante")
         
-        time_visitante_options = get_unique_values("time_visitante")
-        time_visitante = validated_input("🚀 Time Visitante", time_visitante_options, key="time_visitante")
-        
-        # Mercado: adiciona a opção "Bingo"
+        # Mercado: adiciona a opção "Bingo" aos mercados já existentes
         mercados = ["Over 1.5", "Lay Visitante", "Lay 0x1", "Target Futebol", "Target Basquete", "Bingo"]
         mercado = st.selectbox("🎯 Mercado", options=mercados)
         
@@ -228,7 +222,9 @@ if page == "Registro de Aposta":
                 else:
                     lucro = stake if resultado == "Green ✅" else -((odd - 1) * stake)
                 conn = get_db_connection()
+                # Insere o usuário (se ainda não existir)
                 conn.execute("INSERT OR IGNORE INTO usuarios (email) VALUES (?)", (user_email,))
+                # Insere a aposta
                 conn.execute("""
                     INSERT INTO apostas (email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -302,13 +298,6 @@ elif page == "Relatórios e Estatísticas":
         if submitted_banca:
             set_config("banca_inicial", nova_banca)
             st.success("Banca Inicial atualizada!")
-    
-    # Botão para atualizar a página (fora do formulário)
-    if st.button("Atualizar Página"):
-        try:
-            st.experimental_rerun()
-        except AttributeError:
-            st.warning("A função experimental_rerun não está disponível nesta versão do Streamlit. Por favor, atualize sua versão ou recarregue a página manualmente.")
     
     # --- Consulta das apostas ---
     conn = get_db_connection()
@@ -400,52 +389,28 @@ elif page == "Relatórios e Estatísticas":
                         st.error(f"Erro ao excluir aposta {item}: {e}")
                 st.success("Apostas excluídas com sucesso!")
                 reindex_apostas()
-                st.experimental_rerun()
+                # O usuário deverá atualizar a página manualmente para ver as alterações.
             
             # --- Gráficos Adicionais ---
             st.markdown("## Análises Adicionais")
             col_m1, col_m2 = st.columns(2)
             with col_m1:
-                # Lucro por Método
+                # Lucro por Método - gráfico em barra com barras finas
                 df_metodo = df.groupby("metodo")["lucro"].sum().reset_index().sort_values(by="lucro", ascending=False)
-                fig_metodo = px.bar(
-                    df_metodo,
-                    x="metodo",
-                    y="lucro",
-                    title="📊 Lucro por Método",
-                    template="plotly_white",
-                    opacity=0.8,
-                    width=600,
-                    height=400
-                )
+                fig_metodo = px.bar(df_metodo, x="metodo", y="lucro", title="📊 Lucro por Método", height=400)
+                fig_metodo.update_traces(marker_line_width=1, marker_line_color='black')
                 st.plotly_chart(fig_metodo)
             with col_m2:
-                # Lucro por Campeonato (top 10 e bottom 10)
+                # Lucro por Campeonato - exibe os 10 mais lucrativos e 10 menos lucrativos
                 df_camp = df.groupby("campeonato")["lucro"].sum().reset_index()
-                df_top10 = df_camp.sort_values("lucro", ascending=False).head(10)
-                df_bottom10 = df_camp.sort_values("lucro", ascending=True).head(10)
-                fig_top = px.bar(
-                    df_top10,
-                    x="campeonato",
-                    y="lucro",
-                    title="Top 10 Campeonatos Mais Lucrativos",
-                    template="plotly_white",
-                    opacity=0.8,
-                    width=600,
-                    height=400
-                )
-                fig_bottom = px.bar(
-                    df_bottom10,
-                    x="campeonato",
-                    y="lucro",
-                    title="Top 10 Campeonatos Menos Lucrativos",
-                    template="plotly_white",
-                    opacity=0.8,
-                    width=600,
-                    height=400
-                )
-                st.plotly_chart(fig_top)
-                st.plotly_chart(fig_bottom)
+                df_camp_mais = df_camp.sort_values(by="lucro", ascending=False).head(10)
+                df_camp_menos = df_camp.sort_values(by="lucro", ascending=True).head(10)
+                fig_camp_mais = px.bar(df_camp_mais, x="campeonato", y="lucro", title="📊 Top 10 Campeonatos Mais Lucrativos", height=400)
+                fig_camp_mais.update_traces(marker_line_width=1, marker_line_color='black')
+                st.plotly_chart(fig_camp_mais)
+                fig_camp_menos = px.bar(df_camp_menos, x="campeonato", y="lucro", title="📊 Top 10 Campeonatos Menos Lucrativos", height=400)
+                fig_camp_menos.update_traces(marker_line_width=1, marker_line_color='black')
+                st.plotly_chart(fig_camp_menos)
             
             # --- Gráfico: Evolução da Banca ---
             st.markdown("## Evolução da Banca")
