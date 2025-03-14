@@ -341,9 +341,10 @@ elif page == "Relatórios e Estatísticas":
                 "resultado": "Resultado",
                 "lucro": "Lucro"
             })
-            # Cria um DataFrame para exibição sem o ID (para visualização) e oculta o índice do DataFrame
+            # Cria um DataFrame para exibição sem o ID (para visualização)
             display_df = df_exibicao.drop(columns=["ID"])
-            st.dataframe(display_df.style.hide_index())
+            # Usa st.write para renderizar o Pandas Styler (com o índice oculto)
+            st.write(display_df.style.hide_index())
             
             # Opção para excluir apostas: apresenta uma lista com informações (incluindo o ID internamente)
             options_for_deletion = df_exibicao.apply(
