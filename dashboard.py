@@ -59,7 +59,7 @@ criar_tabelas()
 def reindex_apostas():
     conn = get_db_connection()
     cur = conn.cursor()
-    # Desativa as verificações de chave estrangeira temporariamente
+    # Desativa temporariamente as verificações de chave estrangeira
     cur.execute("PRAGMA foreign_keys=OFF;")
     conn.commit()
     cur.execute("BEGIN TRANSACTION;")
@@ -328,7 +328,7 @@ elif page == "Relatórios e Estatísticas":
             st.plotly_chart(fig)
             
             st.markdown("### Apostas Registradas")
-            # Prepara DataFrame para exclusão: inclui o ID para uso interno, mas não o exibe
+            # Prepara DataFrame para exclusão: inclui o ID para uso interno
             df_exibicao = df_filtrado[["id", "data", "campeonato", "time_mandante", "time_visitante", "odd", "resultado", "lucro"]].copy()
             df_exibicao["data"] = df_exibicao["data"].dt.date
             df_exibicao = df_exibicao.rename(columns={
@@ -341,10 +341,8 @@ elif page == "Relatórios e Estatísticas":
                 "resultado": "Resultado",
                 "lucro": "Lucro"
             })
-            # Cria um DataFrame para exibição sem o ID (para visualização)
-            display_df = df_exibicao.drop(columns=["ID"])
-            # Usa st.write para renderizar o Pandas Styler (com o índice oculto)
-            st.write(display_df.style.hide_index())
+            # Exibe a tabela com o índice padrão (sem ocultá-lo)
+            st.dataframe(df_exibicao)
             
             # Opção para excluir apostas: apresenta uma lista com informações (incluindo o ID internamente)
             options_for_deletion = df_exibicao.apply(
