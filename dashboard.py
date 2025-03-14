@@ -14,7 +14,7 @@ def get_db_connection():
 
 def criar_tabelas():
     conn = get_db_connection()
-    # Tabela de usuários (mantida para a estrutura, mesmo para uso pessoal)
+    # Tabela de usuários (mantida para estrutura, mesmo que para uso pessoal)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             email TEXT PRIMARY KEY
@@ -65,7 +65,7 @@ st.sidebar.title("Menu")
 page = st.sidebar.radio("Selecione a página:", ["Registro de Aposta", "Relatórios e Estatísticas"])
 
 # =============================================================================
-# Custom CSS para melhorar a aparência dos botões de exclusão
+# Custom CSS para melhorar a aparência (caso necessário)
 # =============================================================================
 st.markdown(
     """
@@ -219,7 +219,7 @@ if page == "Registro de Aposta":
                     conn.close()
 
 # =============================================================================
-# Página: Relatórios e Estatísticas (com exclusão intuitiva)
+# Página: Relatórios e Estatísticas
 # =============================================================================
 elif page == "Relatórios e Estatísticas":
     st.title("Relatórios e Estatísticas")
@@ -281,23 +281,40 @@ elif page == "Relatórios e Estatísticas":
             st.plotly_chart(fig)
             
             st.markdown("### Apostas Registradas")
-            # Exibe cada aposta com botão de exclusão ao lado
-            for idx, row in df_filtrado.iterrows():
-                cols = st.columns([1,2,2,2,1,1,1,1])
-                data_str = row["data"].date().strftime("%Y-%m-%d") if isinstance(row["data"], pd.Timestamp) else row["data"]
-                cols[0].write(data_str)
-                cols[1].write(row["campeonato"])
-                cols[2].write(row["time_mandante"])
-                cols[3].write(row["time_visitante"])
-                cols[4].write(row["odd"])
-                cols[5].write(row["resultado"])
-                cols[6].write(row["lucro"])
-                if cols[7].button("❌", key=f"del_{row['id']}"):
-                    conn = get_db_connection()
-                    conn.execute("DELETE FROM apostas WHERE id = ?", (row["id"],))
-                    conn.commit()
-                    conn.close()
-                    st.experimental_rerun()
+            # Preparar DataFrame para exibição (incluindo o ID para facilitar a exclusão)
+            df_exibicao = df_filtrado[["id", "data", "campeonato", "time_mandante", "time_visitante", "odd", "resultado", "lucro"]].copy()
+            df_exibicao["data"] = df_exibicao["data"].dt.date
+            df_exibicao = df_exibicao.rename(columns={
+                "id": "ID",
+                "data": "Data",
+                "campeonato": "Campeonato",
+                "time_mandante": "Mandante",
+                "time_visitante": "Visitante",
+                "odd": "Odd",
+                "resultado": "Resultado",
+                "lucro": "Lucro"
+            })
+            st.dataframe(df_exibicao)
+            
+            # Opção para excluir apostas
+            # Cria uma lista de opções descritivas para exclusão, utilizando o ID
+            options_for_deletion = df_exibicao.apply(
+                lambda row: f"ID {row['ID']} - {row['Data']} - {row['Campeonato']} - {row['Mandante']} vs {row['Visitante']}", axis=1
+            ).tolist()
+            selected_deletions = st.multiselect("Selecione as apostas para excluir", options=options_for_deletion)
+            if st.button("❌ Excluir Apostas Selecionadas"):
+                for item in selected_deletions:
+                    try:
+                        # Extrai o ID a partir da string (assumindo que está no formato "ID {id} - ...")
+                        id_val = int(item.split(" ")[1])
+                        conn = get_db_connection()
+                        conn.execute("DELETE FROM apostas WHERE id = ?", (id_val,))
+                        conn.commit()
+                        conn.close()
+                    except Exception as e:
+                        st.error(f"Erro ao excluir aposta {item}: {e}")
+                st.success("Apostas excluídas com sucesso!")
+                st.experimental_rerun()
         else:
             st.warning("Nenhuma aposta encontrada com os filtros selecionados.")
     else:
