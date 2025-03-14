@@ -116,9 +116,23 @@ def set_config(chave, valor):
     conn.close()
 
 # =============================================================================
+# Função de Input com Validação (estilo Google Sheets)
+# =============================================================================
+def validated_input(label, options, key):
+    # Ordena as opções já registradas e acrescenta a opção para inserir um novo valor
+    options = sorted(options)
+    options_with_new = options + ["Adicionar Novo"]
+    selected = st.selectbox(label, options_with_new, key=key+"_select")
+    if selected == "Adicionar Novo":
+        new_val = st.text_input(f"Digite novo {label}", key=key+"_input")
+        return new_val
+    else:
+        return selected
+
+# =============================================================================
 # Configuração – Uso Pessoal (email fixo)
 # =============================================================================
-user_email = "darleirodriguesalves0@gmail.com"  # Altere se desejar
+user_email = "darleirodriguesalves0@gmail.com"  # Altere se necessário
 
 # =============================================================================
 # Barra Lateral – Navegação entre Páginas
@@ -127,7 +141,7 @@ st.sidebar.title("Menu")
 page = st.sidebar.radio("Selecione a página:", ["Registro de Aposta", "Relatórios e Estatísticas"])
 
 # =============================================================================
-# Custom CSS para Botão de Exclusão (e demais ajustes visuais)
+# Custom CSS para Botão de Exclusão (e outros ajustes visuais)
 # =============================================================================
 st.markdown(
     """
@@ -153,13 +167,13 @@ st.markdown(
 )
 
 # =============================================================================
-# Página: Registro de Aposta (com Aba para Cadastro de Métodos)
+# Página: Registro de Aposta (com aba para Cadastro de Métodos)
 # =============================================================================
 if page == "Registro de Aposta":
     st.title("Registro de Aposta")
     st.write("Utilize esta página para registrar novas apostas e cadastrar métodos.")
 
-    # Cria abas para: Nova Aposta e Cadastro de Métodos
+    # Cria abas: uma para nova aposta e outra para cadastro de métodos
     tabs = st.tabs(["Nova Aposta", "Cadastro de Métodos"])
     
     # -------------------------------------------------------------------------
@@ -179,28 +193,25 @@ if page == "Registro de Aposta":
             st.warning("Nenhum método cadastrado. Cadastre um método na aba 'Cadastro de Métodos'.")
             metodo_selecionado = None
         
-        # Data da aposta
         data_aposta = st.date_input("📅 Data da Aposta", value=datetime.date.today())
         
-        # Função para buscar valores únicos já registrados (para autocomplete)
+        # Função para buscar valores únicos já registrados no banco
         def get_unique_values(col_name):
             conn = get_db_connection()
             query = f"SELECT DISTINCT {col_name} FROM apostas WHERE email = ? AND {col_name} != ''"
             df_temp = pd.read_sql_query(query, conn, params=(user_email,))
             conn.close()
-            valores = df_temp[col_name].dropna().unique().tolist()
-            return sorted(valores)
+            return sorted(df_temp[col_name].dropna().unique().tolist())
         
-        # Campeonato – input com sugestões (autocomplete simples)
+        # Campos de Campeonato, Time Mandante e Time Visitante com validação estilo Google Sheets
         camp_options = get_unique_values("campeonato")
-        campeonato = st.text_input("🏆 Campeonato", placeholder="Digite o nome do campeonato")
-        if camp_options:
-            st.info(f"Exemplos: {', '.join(camp_options[:5])}")
+        campeonato = validated_input("🏆 Campeonato", camp_options, key="campeonato")
         
-        # Time Mandante – input com sugestões
-        time_mandante = st.text_input("🏠 Time Mandante", placeholder="Digite o nome do time mandante")
-        # Time Visitante – input com sugestões
-        time_visitante = st.text_input("🚀 Time Visitante", placeholder="Digite o nome do time visitante")
+        time_mandante_options = get_unique_values("time_mandante")
+        time_mandante = validated_input("🏠 Time Mandante", time_mandante_options, key="time_mandante")
+        
+        time_visitante_options = get_unique_values("time_visitante")
+        time_visitante = validated_input("🚀 Time Visitante", time_visitante_options, key="time_visitante")
         
         # Mercado: adiciona a opção "Bingo" aos mercados já existentes
         mercados = ["Over 1.5", "Lay Visitante", "Lay 0x1", "Target Futebol", "Target Basquete", "Bingo"]
@@ -389,7 +400,7 @@ elif page == "Relatórios e Estatísticas":
                         st.error(f"Erro ao excluir aposta {item}: {e}")
                 st.success("Apostas excluídas com sucesso!")
                 reindex_apostas()
-                # O usuário deverá atualizar a página manualmente para ver as alterações.
+                st.info("Atualize a página manualmente para ver as alterações.")
             
             # --- Gráficos Adicionais ---
             st.markdown("## Análises Adicionais")
