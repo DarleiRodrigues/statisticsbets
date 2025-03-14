@@ -303,10 +303,11 @@ elif page == "Relatórios e Estatísticas":
             set_config("banca_inicial", nova_banca)
             st.success("Banca Inicial atualizada!")
     
+    # Botão para atualizar a página (fora do formulário)
     if st.button("Atualizar Página"):
         st.experimental_rerun()
     
-    # --- Consulta das Apostas ---
+    # --- Consulta das apostas ---
     conn = get_db_connection()
     df = pd.read_sql_query("SELECT * FROM apostas WHERE email = ?", conn, params=(user_email,))
     conn.close()
@@ -321,6 +322,7 @@ elif page == "Relatórios e Estatísticas":
         data_inicio = col1.date_input("Data Início", value=data_min, min_value=data_min, max_value=data_max)
         data_fim = col2.date_input("Data Fim", value=data_max, min_value=data_min, max_value=data_max)
         agrupamento = col3.selectbox("Agrupar por", options=["Dia", "Semana", "Mês", "Ano"])
+        # Filtro por Mercado
         mercados_unicos = sorted(df["mercado"].dropna().unique().tolist())
         mercado_opcoes = ["Todos"] + mercados_unicos
         mercado_selecionado = col4.selectbox("Filtrar por Mercado", options=mercado_opcoes)
@@ -358,12 +360,10 @@ elif page == "Relatórios e Estatísticas":
             # --- Gráfico: Lucro Acumulado por Período ---
             df_agrupado = df_filtrado.groupby("Periodo")["lucro"].sum().reset_index()
             df_agrupado["Lucro Acumulado"] = df_agrupado["lucro"].cumsum()
-            fig_acumulado = px.line(df_agrupado, x="Periodo", y="Lucro Acumulado", 
-                                    title="📈 Lucro Acumulado por Período", 
-                                    template="plotly_white")
-            st.plotly_chart(fig_acumulado, use_container_width=True)
+            fig_acumulado = px.line(df_agrupado, x="Periodo", y="Lucro Acumulado", title="📈 Lucro Acumulado por Período")
+            st.plotly_chart(fig_acumulado)
             
-            # --- Exibição da Tabela de Apostas ---
+            # --- Exibição da Tabela de Apostas (sem exibir o ID) ---
             st.markdown("### Apostas Registradas")
             df_exibicao = df_filtrado[["id", "data", "campeonato", "time_mandante", "time_visitante", "odd", "resultado", "lucro"]].copy()
             df_exibicao["data"] = df_exibicao["data"].dt.date
@@ -377,8 +377,7 @@ elif page == "Relatórios e Estatísticas":
                 "resultado": "Resultado",
                 "lucro": "Lucro"
             })
-            # Remove o campo "ID" da exibição (para fins de visualização)
-            st.dataframe(df_exibicao.drop(columns=["ID"]), use_container_width=True)
+            st.dataframe(df_exibicao.drop(columns=["ID"]))
             
             # --- Exclusão de Apostas ---
             options_for_deletion = df_exibicao.apply(
@@ -402,44 +401,42 @@ elif page == "Relatórios e Estatísticas":
             
             # --- Gráficos Adicionais ---
             st.markdown("## Análises Adicionais")
-            
-            # Lucro por Método (Top 10 e Bottom 10)
-            df_metodo_sum = df.groupby("metodo")["lucro"].sum().reset_index()
-            df_metodo_top = df_metodo_sum.sort_values(by="lucro", ascending=False).head(10)
-            df_metodo_bottom = df_metodo_sum.sort_values(by="lucro", ascending=True).head(10)
-            
-            st.subheader("Lucro por Método - Top 10")
-            fig_metodo_top = px.bar(df_metodo_top, x="metodo", y="lucro", 
-                                    title="📊 Top 10 Métodos mais Lucrativos", 
-                                    template="plotly_white")
-            fig_metodo_top.update_traces(marker_line_width=1, marker_line_color='black')
-            st.plotly_chart(fig_metodo_top, use_container_width=True)
-            
-            st.subheader("Lucro por Método - Bottom 10")
-            fig_metodo_bottom = px.bar(df_metodo_bottom, x="metodo", y="lucro", 
-                                       title="📊 Top 10 Métodos Menos Lucrativos", 
-                                       template="plotly_white")
-            fig_metodo_bottom.update_traces(marker_line_width=1, marker_line_color='black')
-            st.plotly_chart(fig_metodo_bottom, use_container_width=True)
-            
-            # Lucro por Campeonato (Top 10 e Bottom 10)
-            df_camp_sum = df.groupby("campeonato")["lucro"].sum().reset_index()
-            df_camp_top = df_camp_sum.sort_values(by="lucro", ascending=False).head(10)
-            df_camp_bottom = df_camp_sum.sort_values(by="lucro", ascending=True).head(10)
-            
-            st.subheader("Lucro por Campeonato - Top 10")
-            fig_camp_top = px.bar(df_camp_top, x="campeonato", y="lucro", 
-                                  title="📊 Top 10 Campeonatos mais Lucrativos", 
-                                  template="plotly_white")
-            fig_camp_top.update_traces(marker_line_width=1, marker_line_color='black')
-            st.plotly_chart(fig_camp_top, use_container_width=True)
-            
-            st.subheader("Lucro por Campeonato - Bottom 10")
-            fig_camp_bottom = px.bar(df_camp_bottom, x="campeonato", y="lucro", 
-                                     title="📊 Top 10 Campeonatos Menos Lucrativos", 
-                                     template="plotly_white")
-            fig_camp_bottom.update_traces(marker_line_width=1, marker_line_color='black')
-            st.plotly_chart(fig_camp_bottom, use_container_width=True)
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+                # Lucro por Método
+                df_metodo = df.groupby("metodo")["lucro"].sum().reset_index().sort_values(by="lucro", ascending=False)
+                fig_metodo = px.bar(
+                    df_metodo,
+                    x="metodo",
+                    y="lucro",
+                    title="📊 Lucro por Método",
+                    template="plotly_white",
+                    opacity=0.8
+                )
+                st.plotly_chart(fig_metodo)
+            with col_m2:
+                # Lucro por Campeonato (top 10 e bottom 10)
+                df_camp = df.groupby("campeonato")["lucro"].sum().reset_index()
+                df_top10 = df_camp.sort_values("lucro", ascending=False).head(10)
+                df_bottom10 = df_camp.sort_values("lucro", ascending=True).head(10)
+                fig_top = px.bar(
+                    df_top10,
+                    x="campeonato",
+                    y="lucro",
+                    title="Top 10 Campeonatos Mais Lucrativos",
+                    template="plotly_white",
+                    opacity=0.8
+                )
+                fig_bottom = px.bar(
+                    df_bottom10,
+                    x="campeonato",
+                    y="lucro",
+                    title="Top 10 Campeonatos Menos Lucrativos",
+                    template="plotly_white",
+                    opacity=0.8
+                )
+                st.plotly_chart(fig_top)
+                st.plotly_chart(fig_bottom)
             
             # --- Gráfico: Evolução da Banca ---
             st.markdown("## Evolução da Banca")
@@ -447,17 +444,19 @@ elif page == "Relatórios e Estatísticas":
             if banca_inicial is None:
                 st.warning("Defina a banca inicial para visualizar a evolução.")
             else:
+                # Agrupa os lucros por data e preenche lacunas no período
                 df_banca = df.copy()
                 df_banca["Data"] = df_banca["data"].dt.date
                 df_banca = df_banca.groupby("Data")["lucro"].sum().reset_index()
+                # Cria uma sequência de datas do período
                 datas = pd.date_range(start=data_inicio, end=data_fim).date
                 df_datas = pd.DataFrame({"Data": datas})
                 df_banca = pd.merge(df_datas, df_banca, on="Data", how="left")
                 df_banca["lucro"] = df_banca["lucro"].fillna(0)
                 df_banca["Lucro Acumulado"] = df_banca["lucro"].cumsum()
                 df_banca["Banca"] = banca_inicial + df_banca["Lucro Acumulado"]
-                fig_banca = px.line(df_banca, x="Data", y="Banca", title="📈 Evolução da Banca", template="plotly_white")
-                st.plotly_chart(fig_banca, use_container_width=True)
+                fig_banca = px.line(df_banca, x="Data", y="Banca", title="📈 Evolução da Banca")
+                st.plotly_chart(fig_banca)
             
         else:
             st.warning("Nenhuma aposta encontrada com os filtros selecionados.")
