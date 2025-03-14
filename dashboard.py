@@ -288,33 +288,27 @@ elif page == "Relatórios e Estatísticas":
     st.title("Relatórios e Estatísticas")
     
     # --- Configuração da Banca Inicial ---
-st.subheader("Configuração da Banca Inicial")
-banca_atual = get_config("banca_inicial")
-if banca_atual is None:
-    st.info("Nenhuma banca inicial definida. Defina um valor abaixo:")
-else:
-    st.write(f"Banca Inicial Atual: **{banca_atual:.2f} unidades**")
-
-with st.form("form_banca"):
-    nova_banca = st.number_input(
-        "Defina/Atualize a Banca Inicial",
-        min_value=0.0,
-        format="%.2f",
-        value=banca_atual if banca_atual is not None else 0.0
-    )
-    submitted_banca = st.form_submit_button("Salvar Banca Inicial")
-    if submitted_banca:
-        set_config("banca_inicial", nova_banca)
-        st.success("Banca Inicial atualizada!")
-
-# Botão para atualizar a página (fora do formulário)
-if st.button("Atualizar Página"):
-    st.experimental_rerun()
-
+    st.subheader("Configuração da Banca Inicial")
+    banca_atual = get_config("banca_inicial")
+    if banca_atual is None:
+        st.info("Nenhuma banca inicial definida. Defina um valor abaixo:")
+    else:
+        st.write(f"Banca Inicial Atual: **{banca_atual:.2f} unidades**")
     
-    # Botão para atualizar a página (fora do formulário)
+    with st.form("form_banca"):
+        nova_banca = st.number_input(
+            "Defina/Atualize a Banca Inicial",
+            min_value=0.0,
+            format="%.2f",
+            value=banca_atual if banca_atual is not None else 0.0
+        )
+        submitted_banca = st.form_submit_button("Salvar Banca Inicial")
+        if submitted_banca:
+            set_config("banca_inicial", nova_banca)
+            st.success("Banca Inicial atualizada!")
+    
     if st.button("Atualizar Página"):
-    st.experimental_rerun()
+        st.experimental_rerun()
     
     # --- Consulta das apostas ---
     conn = get_db_connection()
