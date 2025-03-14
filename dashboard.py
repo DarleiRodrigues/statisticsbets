@@ -4,6 +4,9 @@ import pandas as pd
 import datetime
 import plotly.express as px
 
+# Configuração da página para uso em tela inteira
+st.set_page_config(layout="wide", page_title="Dashboard de Apostas")
+
 # =============================================================================
 # Funções de Conexão e Criação de Tabelas
 # =============================================================================
@@ -116,6 +119,17 @@ def set_config(chave, valor):
     conn.close()
 
 # =============================================================================
+# Função de Autocomplete (simples, exibindo sugestões)
+# =============================================================================
+def autocomplete_input(label, options, key=None):
+    value = st.text_input(label, key=key, placeholder="Digite ou selecione")
+    if value:
+        sugestões = [opt for opt in options if value.lower() in opt.lower()]
+        if sugestões:
+            st.caption("Sugestões: " + ", ".join(sugestões))
+    return value
+
+# =============================================================================
 # Configuração – Uso Pessoal (email fixo)
 # =============================================================================
 user_email = "darleirodriguesalves0@gmail.com"  # Altere se desejar
@@ -177,38 +191,23 @@ if page == "Registro de Aposta":
         # Data da aposta
         data_aposta = st.date_input("📅 Data da Aposta", value=datetime.date.today())
         
-        # Função para buscar valores únicos já registrados (para autocompletar)
+        # Função para buscar valores únicos já registrados (para autocomplete)
         def get_unique_values(col_name):
             conn = get_db_connection()
             query = f"SELECT DISTINCT {col_name} FROM apostas WHERE email = ? AND {col_name} != ''"
             df_temp = pd.read_sql_query(query, conn, params=(user_email,))
             conn.close()
-            valores = df_temp[col_name].dropna().unique().tolist()
-            return sorted(valores)
+            return sorted(df_temp[col_name].dropna().unique().tolist())
         
-        # Campeonato – permite selecionar um valor já usado ou digitar um novo
+        # Um único input para cada campo com autocomplete
         camp_options = get_unique_values("campeonato")
-        camp_choice = st.selectbox("🏆 Campeonato", options=["-- Selecione --", "Outro"] + camp_options)
-        if camp_choice in ["-- Selecione --", "Outro"]:
-            campeonato = st.text_input("Digite o Campeonato")
-        else:
-            campeonato = camp_choice
+        campeonato = autocomplete_input("🏆 Campeonato", camp_options, key="campeonato")
         
-        # Time Mandante
         time_mandante_options = get_unique_values("time_mandante")
-        time_mandante_choice = st.selectbox("🏠 Time Mandante", options=["-- Selecione --", "Outro"] + time_mandante_options)
-        if time_mandante_choice in ["-- Selecione --", "Outro"]:
-            time_mandante = st.text_input("Digite o Time Mandante")
-        else:
-            time_mandante = time_mandante_choice
+        time_mandante = autocomplete_input("🏠 Time Mandante", time_mandante_options, key="time_mandante")
         
-        # Time Visitante
         time_visitante_options = get_unique_values("time_visitante")
-        time_visitante_choice = st.selectbox("🚀 Time Visitante", options=["-- Selecione --", "Outro"] + time_visitante_options)
-        if time_visitante_choice in ["-- Selecione --", "Outro"]:
-            time_visitante = st.text_input("Digite o Time Visitante")
-        else:
-            time_visitante = time_visitante_choice
+        time_visitante = autocomplete_input("🚀 Time Visitante", time_visitante_options, key="time_visitante")
         
         # Mercado: adiciona a opção "Bingo" aos mercados já existentes
         mercados = ["Over 1.5", "Lay Visitante", "Lay 0x1", "Target Futebol", "Target Basquete", "Bingo"]
@@ -230,9 +229,7 @@ if page == "Registro de Aposta":
                 else:
                     lucro = stake if resultado == "Green ✅" else -((odd - 1) * stake)
                 conn = get_db_connection()
-                # Insere o usuário (se ainda não existir)
                 conn.execute("INSERT OR IGNORE INTO usuarios (email) VALUES (?)", (user_email,))
-                # Insere a aposta
                 conn.execute("""
                     INSERT INTO apostas (email, metodo, data, campeonato, time_mandante, time_visitante, mercado, tipo_aposta, odd, stake, resultado, lucro)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -325,7 +322,6 @@ elif page == "Relatórios e Estatísticas":
         data_inicio = col1.date_input("Data Início", value=data_min, min_value=data_min, max_value=data_max)
         data_fim = col2.date_input("Data Fim", value=data_max, min_value=data_min, max_value=data_max)
         agrupamento = col3.selectbox("Agrupar por", options=["Dia", "Semana", "Mês", "Ano"])
-        # Filtro por Mercado
         mercados_unicos = sorted(df["mercado"].dropna().unique().tolist())
         mercado_opcoes = ["Todos"] + mercados_unicos
         mercado_selecionado = col4.selectbox("Filtrar por Mercado", options=mercado_opcoes)
@@ -363,10 +359,10 @@ elif page == "Relatórios e Estatísticas":
             # --- Gráfico: Lucro Acumulado por Período ---
             df_agrupado = df_filtrado.groupby("Periodo")["lucro"].sum().reset_index()
             df_agrupado["Lucro Acumulado"] = df_agrupado["lucro"].cumsum()
-            fig_acumulado = px.line(df_agrupado, x="Periodo", y="Lucro Acumulado", title="📈 Lucro Acumulado por Período")
-            st.plotly_chart(fig_acumulado)
+            fig_acumulado = px.line(df_agrupado, x="Periodo", y="Lucro Acumulado", title="📈 Lucro Acumulado por Período", template="plotly_white")
+            st.plotly_chart(fig_acumulado, use_container_width=True)
             
-            # --- Exibição da Tabela de Apostas (sem exibir o ID) ---
+            # --- Exibição da Tabela de Apostas ---
             st.markdown("### Apostas Registradas")
             df_exibicao = df_filtrado[["id", "data", "campeonato", "time_mandante", "time_visitante", "odd", "resultado", "lucro"]].copy()
             df_exibicao["data"] = df_exibicao["data"].dt.date
@@ -380,7 +376,7 @@ elif page == "Relatórios e Estatísticas":
                 "resultado": "Resultado",
                 "lucro": "Lucro"
             })
-            st.dataframe(df_exibicao.drop(columns=["ID"]))
+            st.dataframe(df_exibicao.drop(columns=["ID"]), use_container_width=True)
             
             # --- Exclusão de Apostas ---
             options_for_deletion = df_exibicao.apply(
@@ -404,25 +400,44 @@ elif page == "Relatórios e Estatísticas":
             
             # --- Gráficos Adicionais ---
             st.markdown("## Análises Adicionais")
-            col_m1, col_m2 = st.columns(2)
-            with col_m1:
-                # Lucro por Método
-                df_metodo = df.groupby("metodo")["lucro"].sum().reset_index().sort_values(by="lucro", ascending=False)
-                fig_metodo = px.bar(df_metodo, x="metodo", y="lucro", title="📊 Lucro por Método")
-                st.plotly_chart(fig_metodo)
-            with col_m2:
-                # Lucro por Campeonato
-                df_camp = df.groupby("campeonato")["lucro"].sum().reset_index().sort_values(by="lucro", ascending=False)
-                fig_camp = px.bar(df_camp, x="campeonato", y="lucro", title="📊 Lucro por Campeonato")
-                st.plotly_chart(fig_camp)
             
-            # Lucro por Time (união de times mandantes e visitantes)
-            df_mandante = df[["time_mandante", "lucro"]].rename(columns={"time_mandante": "time"})
-            df_visitante = df[["time_visitante", "lucro"]].rename(columns={"time_visitante": "time"})
-            df_times = pd.concat([df_mandante, df_visitante])
-            df_times_grouped = df_times.groupby("time")["lucro"].sum().reset_index().sort_values(by="lucro", ascending=False)
-            fig_times = px.bar(df_times_grouped, x="time", y="lucro", title="📊 Lucro por Time")
-            st.plotly_chart(fig_times)
+            # Lucro por Método (Top 10 e Bottom 10)
+            df_metodo_sum = df.groupby("metodo")["lucro"].sum().reset_index()
+            df_metodo_top = df_metodo_sum.sort_values(by="lucro", ascending=False).head(10)
+            df_metodo_bottom = df_metodo_sum.sort_values(by="lucro", ascending=True).head(10)
+            
+            st.subheader("Lucro por Método - Top 10")
+            fig_metodo_top = px.bar(df_metodo_top, x="metodo", y="lucro", 
+                                    title="📊 Top 10 Métodos mais Lucrativos", 
+                                    template="plotly_white")
+            fig_metodo_top.update_traces(marker_line_width=1, marker_line_color='black')
+            st.plotly_chart(fig_metodo_top, use_container_width=True)
+            
+            st.subheader("Lucro por Método - Bottom 10")
+            fig_metodo_bottom = px.bar(df_metodo_bottom, x="metodo", y="lucro", 
+                                       title="📊 Top 10 Métodos Menos Lucrativos", 
+                                       template="plotly_white")
+            fig_metodo_bottom.update_traces(marker_line_width=1, marker_line_color='black')
+            st.plotly_chart(fig_metodo_bottom, use_container_width=True)
+            
+            # Lucro por Campeonato (Top 10 e Bottom 10)
+            df_camp_sum = df.groupby("campeonato")["lucro"].sum().reset_index()
+            df_camp_top = df_camp_sum.sort_values(by="lucro", ascending=False).head(10)
+            df_camp_bottom = df_camp_sum.sort_values(by="lucro", ascending=True).head(10)
+            
+            st.subheader("Lucro por Campeonato - Top 10")
+            fig_camp_top = px.bar(df_camp_top, x="campeonato", y="lucro", 
+                                  title="📊 Top 10 Campeonatos mais Lucrativos", 
+                                  template="plotly_white")
+            fig_camp_top.update_traces(marker_line_width=1, marker_line_color='black')
+            st.plotly_chart(fig_camp_top, use_container_width=True)
+            
+            st.subheader("Lucro por Campeonato - Bottom 10")
+            fig_camp_bottom = px.bar(df_camp_bottom, x="campeonato", y="lucro", 
+                                     title="📊 Top 10 Campeonatos Menos Lucrativos", 
+                                     template="plotly_white")
+            fig_camp_bottom.update_traces(marker_line_width=1, marker_line_color='black')
+            st.plotly_chart(fig_camp_bottom, use_container_width=True)
             
             # --- Gráfico: Evolução da Banca ---
             st.markdown("## Evolução da Banca")
@@ -430,19 +445,17 @@ elif page == "Relatórios e Estatísticas":
             if banca_inicial is None:
                 st.warning("Defina a banca inicial para visualizar a evolução.")
             else:
-                # Agrupa os lucros por data e preenche lacunas no período
                 df_banca = df.copy()
                 df_banca["Data"] = df_banca["data"].dt.date
                 df_banca = df_banca.groupby("Data")["lucro"].sum().reset_index()
-                # Cria uma sequência de datas do período
                 datas = pd.date_range(start=data_inicio, end=data_fim).date
                 df_datas = pd.DataFrame({"Data": datas})
                 df_banca = pd.merge(df_datas, df_banca, on="Data", how="left")
                 df_banca["lucro"] = df_banca["lucro"].fillna(0)
                 df_banca["Lucro Acumulado"] = df_banca["lucro"].cumsum()
                 df_banca["Banca"] = banca_inicial + df_banca["Lucro Acumulado"]
-                fig_banca = px.line(df_banca, x="Data", y="Banca", title="📈 Evolução da Banca")
-                st.plotly_chart(fig_banca)
+                fig_banca = px.line(df_banca, x="Data", y="Banca", title="📈 Evolução da Banca", template="plotly_white")
+                st.plotly_chart(fig_banca, use_container_width=True)
             
         else:
             st.warning("Nenhuma aposta encontrada com os filtros selecionados.")
