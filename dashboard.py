@@ -305,7 +305,10 @@ elif page == "Relatórios e Estatísticas":
     
     # Botão para atualizar a página (fora do formulário)
     if st.button("Atualizar Página"):
-        st.experimental_rerun()
+        try:
+            st.experimental_rerun()
+        except AttributeError:
+            st.warning("A função experimental_rerun não está disponível nesta versão do Streamlit. Por favor, atualize sua versão ou recarregue a página manualmente.")
     
     # --- Consulta das apostas ---
     conn = get_db_connection()
@@ -411,7 +414,9 @@ elif page == "Relatórios e Estatísticas":
                     y="lucro",
                     title="📊 Lucro por Método",
                     template="plotly_white",
-                    opacity=0.8
+                    opacity=0.8,
+                    width=600,
+                    height=400
                 )
                 st.plotly_chart(fig_metodo)
             with col_m2:
@@ -425,7 +430,9 @@ elif page == "Relatórios e Estatísticas":
                     y="lucro",
                     title="Top 10 Campeonatos Mais Lucrativos",
                     template="plotly_white",
-                    opacity=0.8
+                    opacity=0.8,
+                    width=600,
+                    height=400
                 )
                 fig_bottom = px.bar(
                     df_bottom10,
@@ -433,7 +440,9 @@ elif page == "Relatórios e Estatísticas":
                     y="lucro",
                     title="Top 10 Campeonatos Menos Lucrativos",
                     template="plotly_white",
-                    opacity=0.8
+                    opacity=0.8,
+                    width=600,
+                    height=400
                 )
                 st.plotly_chart(fig_top)
                 st.plotly_chart(fig_bottom)
